@@ -18,11 +18,12 @@
         - [set](#set)
         - [has](#has)
         - [exist](#exist)
-    - [Object](#object)
+    - [Example](#example)
         - [Array](#array)
         - [ArrayList](#arraylist)
   - [Server](#server)
   - [Web](#web)
+  - [Console-And-Config](#config)
 
 # Installation
 
@@ -63,7 +64,7 @@ const { runServer, createUser } = require('jsontwice.io')
 
 runServer();
 
-// You can edit the configuration of your server inside the package jsontwice.io, in the "database" dir.
+// You can edit the configuration of your server inside the "database" dir.
 
 ``` 
 
@@ -140,7 +141,7 @@ Set a value by a key.
 
 ***
 
-## Object
+## Example
 
 Json Object example.
 
@@ -219,9 +220,8 @@ const { runServer } = require('jsontwice.io')
 runServer()
 ```
 
-**You'll see a new dir in the jsontwice.io package, named 'database'**
+**You'll see a new dir named 'database', the 'config.json' file**
 
-Inside you can find the 'config.json'
 Let's configure your server :)
 
 **Create a new user**
@@ -240,13 +240,49 @@ const { adminPwd } = require('jsontwice.io')
 adminPwd("the new password");
 ```
 
-**EDIT THE CONFIG NEEDS A RESTART OF THE SERVER AND PLEASE DON'T EDIT YOUR CONFIG WHILE SERVER RUNNING**
-
 ***
 
 ## Web 
 
-**Soon**
+```html
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
+        <script src="https://cdn.cmtapp.fr/json.io.client-0.0.2.js"></script>
+
+        <script type="text/javascript">
+            var client = new Client("http://localhost:3674", "root", "moaziehd860231guipo&éguicopiq-_aze")
+
+            // ...
+        </script>
+    </head>
+    <body>
+        ...
+    </body>
+</html>
+```
+
+***
+
+## Config
+
+Inside the `config.json` file : if `server.console_mode` are turn on (by default) you'll see the new console,
+Make able command :)
+
+### Command
+
+**help** : See the help command.
+**reload** : Reload all database and config if changed manually.
+**clear** : Clear the console.
+**close** : Close the server.
+**who** : Who is connected.
+
+### Direct Edit
+
+**database [name]** : Change your location for direct edit (like `cd` command)
+**get [key]** : Give you a value by a key inside your database (global is `config.json`)
+**set [key] [value]** : Set a value by a key inside your database (global is `config.json`)
 
 ***
 
