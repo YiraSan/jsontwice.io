@@ -252,7 +252,7 @@ adminPwd("the new password");
         <script src="https://cdn.cmtapp.fr/json.io.client-0.0.2.js"></script>
 
         <script type="text/javascript">
-            var client = new Client("http://localhost:3674", "root", "moaziehd860231guipo&éguicopiq-_aze")
+            var client = new Client("http://localhost:3674", "root", "root")
 
             // ...
         </script>
