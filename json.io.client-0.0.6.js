@@ -1,11 +1,11 @@
-class StorageInterface {
+class Storage {
 
     #socket;
     #database;
 
     constructor (socket, database) {
         this.#socket = socket;
-        this.#database = database
+        this.#database = database;
     }
 
     /** 
@@ -15,7 +15,7 @@ class StorageInterface {
     get (key) {
         this.#socket.emit("get", this.#database, key);
         return new Promise(resolve => {
-
+            
             setTimeout(()=>{
                 resolve("DATABASE TIMED_OUT")
             }, 10000)
@@ -88,12 +88,12 @@ class StorageInterface {
     has (key) {
         this.#socket.emit("has", this.#database, key);
         return new Promise(resolve => {
-            
-            setTimeout(()=>{
-                resolve("DATABASE TIMED_OUT")
-            }, 10000)
-            
             this.#socket.on("has", (db, k, value, err) => {
+                
+                setTimeout(()=>{
+                    resolve("DATABASE TIMED_OUT")
+                }, 10000)
+
                 if (err) {
                     console.log(err)
                     return resolve(err);
@@ -115,68 +115,19 @@ class StorageInterface {
 
 }
 
-class AcceleratedStorageInterface extends StorageInterface {
-
-    #quick;
-
-    constructor (socket, database) {
-        super (socket, database);
-        this.#quick = {};
-        setTimeout(()=>{
-
-            socket.on("edit", async (d, key) => {
-                if (database != d) return;
-                if (this.#quick[key] != null && this.#quick[key] != undefined)
-                this.#quick[key] = await super.get(key);
-            })
-
-        },1000)
-    }
-
-    get (key) {
-        if (this.#quick[key] != null && this.#quick[key] != undefined) return Promise.resolve(this.#quick[key]);
-        return new Promise(async resolve => {
-            var value = await super.get(key);
-            this.#quick[key] = value;
-            resolve(value)
-        });
-    }
-
-    has (key) {
-        return this.#quick[key] ? Promise.resolve(this.#quick[key]) : super.has(key);
-    }
-
-    set (key, value) {
-        this.#quick[key] = value;
-        return super.set(key, value);
-    }
-
-    remove (key) {
-        this.#quick[key] = null;
-        return super.remove(key);
-    }
-
-}
-
 class Client {
 
-    #io;
     #socket;
-    #options;
 
-    constructor (address, id, pwd, options={
-        log: true,
-    }) {
-        this.#io = require("socket.io-client")
-        this.#socket = this.#io(address)
-        this.#options = options;
+    constructor (address, id, pwd) {
+        this.#socket = io(address, {transports: ['websocket', 'polling', 'flashsocket']})
 
         this.#socket.on("connect", () => {
             this.#socket.emit("auth", id, pwd);
         })
 
         this.#socket.on("disconnect", () => {
-            if (this.#options.log) console.log("Disconnected from the server")
+            console.log("Disconnected from the server")
         })
 
         this.#socket.on("auth", (r, config) => {
@@ -205,12 +156,13 @@ class Client {
 
     /** 
      * @param {String} database 
-     * @returns {StorageInterface}
+     * @returns {Storage}
      */
     getDatabase (database) {
-        return new AcceleratedStorageInterface(this.#socket, database);
+        return new Promise(async resolve => {
+            if (!(await this.getPermission(database)).writing && !(await this.getPermission(database)).reading) return resolve(console.log("Unable to get this database, your permission can't read or write on this database."));
+            resolve(new Storage(this.#socket, database));
+        })
     }
 
 }
-
-module.exports = { Client, Storage: StorageInterface, AcceleratedStorage: AcceleratedStorageInterface };

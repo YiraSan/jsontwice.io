@@ -16,6 +16,7 @@
     - [Storage](#storage)
         - [get](#get)
         - [set](#set)
+        - [remove](#remove)
         - [has](#has)
         - [exist](#exist)
     - [Example](#example)
@@ -122,6 +123,16 @@ Set a value by a key.
 |-|-|:-|
 |key|[String](https://developer.mozilla.org/fr/docs/Web/JavaScript/Reference/Objets_globaux/String)|The key of the value|
 |value|*|The value|
+
+***
+
+### remove
+
+Remove a key.
+
+|Parameter|Type|Description|
+|-|-|:-|
+|key|[String](https://developer.mozilla.org/fr/docs/Web/JavaScript/Reference/Objets_globaux/String)|The key to supress|
 
 ***
 
@@ -249,10 +260,10 @@ adminPwd("the new password");
 <html>
     <head>
         <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
-        <script src="https://cdn.cmtapp.fr/json.io.client-0.0.2.js"></script>
+        <script src="https://cdn.cmtapp.fr/json.io.client-0.0.6.js"></script>
 
         <script type="text/javascript">
-            var client = new Client("http://localhost:3674", "root", "root")
+            var client = new Client("http://localhost:3000/", "root", "root")
 
             // ...
         </script>
@@ -278,11 +289,16 @@ Make able command :)
 **close** : Close the server.
 **who** : Who is connected.
 
+**backup** :
+    **set** : Restore data from a backup.
+    **create**: Create a new backup.
+
 ### Direct Edit
 
 **database [name]** : Change your location for direct edit (like `cd` command)
 **get [key]** : Give you a value by a key inside your database (global is `config.json`)
 **set [key] [value]** : Set a value by a key inside your database (global is `config.json`)
+**remove [key]** : Delete a key inside your database (global is `config.json`)
 
 ***
 

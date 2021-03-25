@@ -9,15 +9,14 @@ const fs        = require('fs')
 var hash        = require('hash.js');
 var term        = require( 'terminal-kit' ).terminal;
 
+var localEmitter = new (require('events'))();
+
 // SERVER ->
 
 function run () {
 
 var register = [];
 var users = {};
-
-var aka = {};
-var akaComplete = [];
 
 var csl = {
     users: [],
@@ -65,29 +64,6 @@ async function updateConsole() {
     if (csl.message != "") console.log(interSide);
     if (config.get("server.console_mode").value() == true) csl.message = "";
 
-    if (typeof config != "object" || config.get("server.console_mode").value() == true) return;
-    if (config.get("server.active_sys_usage").value() == true) {
-        var cpu = Math.floor(100-(await osu.cpu.free()))
-        var mem = 100-(await osu.mem.info()).freeMemPercentage
-        var memS = (await osu.mem.info()).usedMemMb
-        if (cpu < 30) {
-            cpu = chalk.green(cpu)
-        } else if (cpu < 60) {
-            cpu = chalk.yellow(cpu)
-        } else {
-            cpu = chalk.red(cpu)
-        }
-        if (mem < 50) {
-            mem = chalk.green(mem)
-        } else if (mem < 70) {
-            mem = chalk.yellow(mem)
-        } else {
-            mem = chalk.red(mem)
-        }
-        console.log(`CPU: ${cpu}% - RAM: ${(await mem)}% (${memS}mo)`)
-        console.log(interSide)
-    }
-    
 }
 
 function getDatabase(name) {
@@ -103,10 +79,12 @@ function getDatabase(name) {
 
 if (fs.existsSync("database/config.json")) {
 
-    if (!fs.existsSync("backup/")) fs.mkdirSync("backup/");
     if (!fs.existsSync("database/data/")) fs.mkdirSync("database/data/");
 
     var config = low(new FileSync("database/config.json"))
+
+    var server_config = config.get(`server.${config.get("server.mode").value()}`).value();
+    var server_mode = config.get("server.mode").value();
 
     if (!config.has("files").value() || config.get("files").value().length == 0) {
         csl.message = "Erreur lors de la lecture des fichiers dans la config\nNo files in config"
@@ -245,6 +223,10 @@ if (fs.existsSync("database/config.json")) {
         };
     }
 
+    localEmitter.on("edit", (database, key) => {
+        io.emit("edit", database, key);
+    })
+    
     io.on("connection", socket => {
 
         var USER = false;
@@ -254,6 +236,10 @@ if (fs.existsSync("database/config.json")) {
         if (config.get("server.console_mode").value() != true) {
             updateConsole();
         }
+
+        setTimeout(()=>{
+            if (USER == false) socket.disconnect();
+        }, 5000)
 
         socket.on('auth', (user, pwd) => {
             
@@ -286,6 +272,7 @@ if (fs.existsSync("database/config.json")) {
             if (typeof db != "object") return socket.emit('set', database, key, false, "Database doesn't exist");
             if (getAuthorized(USER, database).writing == true) {
                 db.set(key, value).write();
+                localEmitter.emit("edit", database, key);
                 return socket.emit('set', database, key, true);
             } else {
                 return socket.emit('set', database, key, false, "Access Denied");
@@ -302,6 +289,18 @@ if (fs.existsSync("database/config.json")) {
             }
         })
 
+        socket.on('remove', (database, key) => {
+            var db = getDatabase(database)
+            if (typeof db != "object") return socket.emit('remove', database, key, "Database doesn't exist");
+            if (getAuthorized(USER, database).writing == true) {
+                db.unset(key).write();
+                localEmitter.emit("edit", database, key);
+                return socket.emit('remove', database, key, true);
+            } else {
+                return socket.emit('remove', database, key, "Access Denied");
+            }
+        })
+
         socket.on('access', database => {
             socket.emit('access', database, getAuthorized(USER, database))
         })
@@ -315,6 +314,36 @@ if (fs.existsSync("database/config.json")) {
 
     csl.message = `                       Server started on ${require('chalk').yellow(config.get("port").value())}`
     updateConsole();
+
+    var backup = async () => {
+
+        if (server_config.max_backup < 1) server_config.max_backup = 1;
+        if (!fs.existsSync("backup/")) fs.mkdirSync("backup/");
+
+        let date = new Date(), b = {};
+            date = `${date.getFullYear()}-${date.getDate()}-${date.getMonth()+1} ${date.getHours()}.${date.getMinutes()}.${date.getSeconds()}`
+
+        register.forEach((v)=>{
+            b[v.identifier] = v.filesystem.value()
+        })
+
+        fs.writeFileSync(`backup/${date}.backup`, JSON.stringify(b))
+
+        if (server_config.max_backup != "infinity") {
+            var files = fs.readdirSync(`backup/`)
+            var delt = 0;
+
+            for (let i = 0; i < files.length; i++) {
+
+                if (i > server_config.max_backup-1) {
+                    fs.unlinkSync(`backup/${files[delt]}`)
+                    delt++;
+                }
+
+            }
+        }
+
+    }
 
     if (config.get("server.console_mode").value() == true) {
         
@@ -344,6 +373,59 @@ if (fs.existsSync("database/config.json")) {
             } else if (args[0].toLowerCase() == "clear") {
 
                 return updateConsole();
+
+            } else if (args[0].toLowerCase() == "backup") {
+
+                if (!args[1]) return console.log(chalk.red("ERROR: Incorrect Command"));
+
+                switch (args[2].toLowerCase()) {
+
+                    case 'create': 
+
+                        console.log(chalk.red("ERROR: Disabled command by the author"));
+
+                        function bar (encrypt=false) {
+
+                            let thingsToDo = [ 'Compiling database' ]
+                            if (encrypt) thingsToDo.push("Encrypting data");
+                            thingsToDo = thingsToDo.concat([ 'Creating backup file', 'Finishing process' ])
+                        
+                            let count = 0;
+                        
+                            return new Promise(async resolve => {
+                                let progressBar = term.progressBar({
+                                    width: 80,
+                                    title: 'Backup:',
+                                    eta: true,
+                                    percent: true,
+                                    items: thingsToDo.length
+                                })
+                            
+                                progressBar.startItem(thingsToDo[count])
+                            
+                                var intr = setInterval(()=>{
+                                    count++;
+                                    if (count==thingsToDo.length) {
+                                        progressBar.itemDone(thingsToDo[count-1])
+                                        clearInterval(intr.ref())
+                                        return resolve(null);
+                                    }
+                                    progressBar.startItem(thingsToDo[count])
+                                    progressBar.itemDone(thingsToDo[count-1])
+                                }, 2000)
+                            })
+                        
+                        }
+
+                    break;
+
+                    case 'set':
+                        console.log(chalk.red("ERROR: Disabled command by the author"));
+                    break;
+
+                }
+                
+                return;
 
             } else if (args[0].toLowerCase() == "help") {
 
@@ -376,6 +458,7 @@ if (fs.existsSync("database/config.json")) {
                             if (users[csl.users[i].name].admin == true) csl.users[i].role = chalk.red("ADMINISTRATOR");
                             if (users[csl.users[i].name].role) csl.users[i].role = users[csl.users[i].name].role;
                         }
+                        csl.users[i].ip = csl.users[i].ip.replace("::ffff:", "")
                         if (csl.users[i].ip.includes("127.0.0.1")) csl.users[i].ip = "localhost";
                         console.log(`${csl.users[i].name} - [${csl.users[i].ip}] (${csl.users[i].role})`)
                     }
@@ -405,14 +488,10 @@ if (fs.existsSync("database/config.json")) {
 
                 if (!args[1]) return console.log(chalk.red("ERROR: Please specify the key!"));
                 if (!args[2]) return console.log(chalk.red("ERROR: Please specify the value!"));
-                if (args[3]) return console.log(chalk.red("ERROR: You can't put a value over than an args."));
+                if (args[3]) return console.log(chalk.red("ERROR: You can't put a value over than two args."));
 
-                if (typeof args[2] == "string") {
-                    args[2] = args[2].toLowerCase()
-                }
-
-                if (args[2] == "false") { args[2] = false }
-                if (args[2] == "true") { args[2] = true }
+                if (typeof args[2] == "string") if (args[2].toLowerCase() == "false") { args[2] = false }
+                if (typeof args[2] == "string") if (args[2].toLowerCase() == "true") { args[2] = true }
 
                 if (!isNaN(parseInt(args[2]))) { args[2] = parseInt(args[2]) }
 
@@ -429,7 +508,36 @@ if (fs.existsSync("database/config.json")) {
 
                     try {
                         getDatabase(database.id).set(args[1], args[2]).write()
+                        localEmitter.emit("edit", database.id, args[1]);
                         console.log(chalk.green("Succesfully edit."))
+                    } catch (error) {
+                        console.log(chalk.red("ERROR: "+error))
+                    }
+
+                }
+
+                return;
+
+            } else if (args[0].toLowerCase() == "remove") {
+
+                if (!args[1]) return console.log(chalk.red("ERROR: Please specify the key!"));
+                if (args[2]) return console.log(chalk.red("ERROR: You can't put a value over than an args."));
+
+                if (database.id == "." || database.id == null) {
+
+                    try {
+                        config.unset(args[1]).write()
+                        console.log(chalk.green("Succesfully remove."))
+                    } catch (error) {
+                        console.log(chalk.red("ERROR: "+error))
+                    }
+
+                } else {
+
+                    try {
+                        getDatabase(database.id).unset(args[1]).write()
+                        localEmitter.emit("edit", database.id, args[1]);
+                        console.log(chalk.green("Succesfully remove."))
                     } catch (error) {
                         console.log(chalk.red("ERROR: "+error))
                     }
@@ -468,9 +576,14 @@ if (fs.existsSync("database/config.json")) {
                 'close',
                 'get',
                 'set',
+                'remove',
                 'help',
                 'clear',
                 'who',
+                'backup',
+                'backup create',
+
+                'backup set'
             ];
         
             register.forEach(v=>{
@@ -482,6 +595,7 @@ if (fs.existsSync("database/config.json")) {
             for(var k in db) {
                 databaseKey.push(`get ${k}`);
                 databaseKey.push(`set ${k}`);
+                databaseKey.push(`remove ${k}`);
             }
 
             var autoComplete = complete.concat(databaseKey);
@@ -499,6 +613,9 @@ if (fs.existsSync("database/config.json")) {
                             case 'set':
                                 config.style = term.white;
                                 return previousTokens.length ? null : term.red;
+                            case 'remove':
+                                config.style = term.white;
+                                return previousTokens.length ? null : term.bold.red;
                             case 'get':
                                 config.style = term.white;
                                 return previousTokens.length ? null : term.brightBlue;
@@ -511,6 +628,9 @@ if (fs.existsSync("database/config.json")) {
                             case 'db':
                                 config.style = term.cyan;
                                 return previousTokens.length ? null : term.magenta;
+                            case 'backup':
+                                config.style = term.white;
+                                return previousTokens.length ? null : term.brightGreen;
                         }
                     }
                 },
@@ -527,7 +647,9 @@ if (fs.existsSync("database/config.json")) {
                     }
                 }
             )
-        
+
+            
+
         }
     
         console.log(`\nFind all commands in 'help' | jsontwice.io@${(require('./package.json')).version}\nCreated by YiraSan\n`)
@@ -541,6 +663,13 @@ if (fs.existsSync("database/config.json")) {
         }, 1000)
 
     }
+
+    // BACKUP -->
+    backup();
+
+    if (server_config.enable_backup == true) setInterval(()=>{
+        backup()
+    }, server_config.time_beetween_backup*1000*60);
 
 } else {
 
@@ -581,18 +710,27 @@ if (fs.existsSync("database/config.json")) {
 
     config.set("server", {
         main_server: {
-            active_backup: false,
-            active_backup_server: false,
-            backup_server: [],
-            time_beetween_backup: 3600,
+            enable_backup: false,
+            backup_server: [
+                {
+                    name: "BACKUP_SERVER_01",
+                    key: "i'm a super secret key autorized this backup server to download and create a backup.",
+                    user: "root",
+                    enable: false,
+                }
+            ],
+            time_beetween_backup: 1000,
             max_backup: 3,
+            encrypt: {
+                enable: false,
+                key: "nothing here"
+            }
         },
         backup_server: {
             time_beetween_backup: 3600,
-            max_backup: 5,
+            max_backup: "infinity",
             can_send_data: false,
         },
-        active_sys_usage: false,
         console_mode: true,
         mode: "main_server",
     }).write()
