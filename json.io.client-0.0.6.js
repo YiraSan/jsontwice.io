@@ -3,7 +3,7 @@ class Storage {
     #socket;
     #database;
 
-    constructor (socket, database) {
+    constructor (socket, database) { 
         this.#socket = socket;
         this.#database = database;
     }
@@ -43,7 +43,7 @@ class Storage {
             
             setTimeout(()=>{
                 resolve("DATABASE TIMED_OUT")
-            }, 10000)
+            }, 10001)
 
             this.#socket.on("set", (db, k, value, err) => {
                 if (err) {
@@ -94,7 +94,7 @@ class Storage {
                     resolve("DATABASE TIMED_OUT")
                 }, 10000)
 
-                if (err) {
+                if (err) { 
                     console.log(err)
                     return resolve(err);
                 }
